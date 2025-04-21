@@ -1,0 +1,68 @@
+import cv2
+import pytesseract
+import re
+from collections import Counter
+
+# Nếu bạn dùng Windows, bỏ comment dòng sau và chỉnh đúng đường dẫn tới tesseract.exe
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+def extract_results_from_image(image_path):
+    """
+    Đọc ảnh và trích xuất chuỗi kết quả Tài/Xỉu từ ảnh bằng OCR
+    """
+    image = cv2.imread(image_path)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    text = pytesseract.image_to_string(gray, lang='eng')
+    
+    # Lọc ra ký tự T (Tài) hoặc X (Xỉu) viết hoa
+    results = re.findall(r'[TX]', text.upper())
+    return results
+
+def detect_pattern(results):
+    """
+    Phân tích các mẫu cầu 3 kết quả liên tiếp và kết quả tiếp theo
+    """
+    pattern_counts = {}
+    for i in range(len(results)-3):
+        pattern = tuple(results[i:i+3])
+        next_result = results[i+3]
+        if pattern not in pattern_counts:
+            pattern_counts[pattern] = {'T': 0, 'X': 0}
+        pattern_counts[pattern][next_result] += 1
+    return pattern_counts
+
+def predict_next(results, pattern_counts):
+    """
+    Dự đoán xác suất ra Tài/Xỉu dựa trên cầu gần nhất
+    """
+    if len(results) < 3:
+        return "❌ Không đủ dữ liệu để dự đoán."
+
+    last_pattern = tuple(results[-3:])
+    if last_pattern in pattern_counts:
+        total = sum(pattern_counts[last_pattern].values())
+        t_prob = pattern_counts[last_pattern]['T'] / total * 100
+        x_prob = pattern_counts[last_pattern]['X'] / total * 100
+        return (
+            f"🧠 Phân tích cầu: {last_pattern}\n"
+            f"🔮 Dự đoán kết quả tiếp theo:\n"
+            f"👉 Tài (T): {t_prob:.2f}%\n"
+            f"👉 Xỉu (X): {x_prob:.2f}%"
+        )
+    else:
+        return "⚠️ Không có cầu trùng khớp trong lịch sử. Không thể dự đoán chắc chắn."
+
+def main():
+    image_path = 'lich_su_taixiu.png'  # Thay bằng đường dẫn ảnh bạn có
+    print(f"📷 Đang xử lý ảnh: {image_path}...")
+
+    results = extract_results_from_image(image_path)
+    print(f"✅ Kết quả nhận dạng từ ảnh: {results}")
+
+    pattern_counts = detect_pattern(results)
+    prediction = predict_next(results, pattern_counts)
+    print("\n📊 Kết quả phân tích và dự đoán:")
+    print(prediction)
+
+if __name__ == "__main__":
+    main()
